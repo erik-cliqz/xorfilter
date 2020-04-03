@@ -1,9 +1,10 @@
+use fnv;
 use rand::{prelude::random, rngs::SmallRng, Rng, SeedableRng};
 use std::collections::hash_map::RandomState;
 use xorfilter::Xor8;
 
 /// Generate a filter with random keys
-fn generate_filter() -> Xor8<RandomState> {
+fn generate_filter() -> Xor8 {
     let seed: u128 = random();
     println!("seed {}", seed);
     let mut rng = SmallRng::from_seed(seed.to_le_bytes());
@@ -14,7 +15,7 @@ fn generate_filter() -> Xor8<RandomState> {
     for key in keys.iter_mut() {
         *key = rng.gen();
     }
-    let mut filter = Xor8::<RandomState>::new();
+    let mut filter = Xor8::new();
     filter.populate(&keys);
     filter.build();
     filter
@@ -44,6 +45,62 @@ fn test_same_filter_encode_decode() {
         filter_read != filter_second,
         "Random generated filters should not be the same"
     );
+}
+
+#[test]
+fn write_and_read() {
+    let strings = vec!["hello", "world"];
+
+    let file_path = {
+        let mut fpath = std::env::temp_dir();
+        fpath.push("xorfilter-test-write-and-read");
+        fpath.into_os_string()
+    };
+
+    {
+        let mut filter = Xor8::new();
+        filter.populate(&strings);
+
+        filter.build();
+
+        assert!(filter.contains("hello"));
+        assert!(filter.contains("world"));
+
+        filter.write_file(&file_path).unwrap();
+    }
+
+    let filter: Xor8 = Xor8::read_file(&file_path).unwrap();
+
+    assert!(filter.contains("hello"));
+    assert!(filter.contains("world"));
+}
+
+#[test]
+fn write_and_read_fnv() {
+    let strings = vec!["hello", "world"];
+
+    let file_path = {
+        let mut fpath = std::env::temp_dir();
+        fpath.push("xorfilter-test-write-and-read-fnv");
+        fpath.into_os_string()
+    };
+
+    {
+        let mut filter: Xor8<fnv::FnvBuildHasher> = Xor8::default();
+        filter.populate(&strings);
+
+        filter.build();
+
+        assert!(filter.contains("hello"));
+        assert!(filter.contains("world"));
+
+        filter.write_file(&file_path).unwrap();
+    }
+
+    let filter: Xor8<fnv::FnvBuildHasher> = Xor8::read_file(&file_path).unwrap();
+
+    assert!(filter.contains("hello"));
+    assert!(filter.contains("world"));
 }
 
 #[test]

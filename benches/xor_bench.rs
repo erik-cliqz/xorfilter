@@ -5,8 +5,6 @@ use rand::{prelude::random, rngs::SmallRng, Rng, SeedableRng};
 use test::Bencher;
 use xorfilter::Xor8;
 
-use std::collections::hash_map::RandomState;
-
 #[bench]
 fn bench_populate_keys_100000(b: &mut Bencher) {
     let seed: u128 = random();
@@ -20,7 +18,7 @@ fn bench_populate_keys_100000(b: &mut Bencher) {
     }
 
     b.iter(|| {
-        let mut filter = Xor8::<RandomState>::new();
+        let mut filter = Xor8::new();
         filter.populate_keys(&keys);
         filter.build();
     })
@@ -39,7 +37,7 @@ fn bench_build_keys_100000(b: &mut Bencher) {
     }
 
     b.iter(|| {
-        let mut filter = Xor8::<RandomState>::new();
+        let mut filter = Xor8::new();
         filter.build_keys(&keys);
     })
 }
@@ -57,7 +55,7 @@ fn bench_populate_100000(b: &mut Bencher) {
     }
 
     b.iter(|| {
-        let mut filter = Xor8::<RandomState>::new();
+        let mut filter = Xor8::new();
         filter.populate(&keys);
         filter.build();
     })
@@ -76,7 +74,7 @@ fn bench_insert_100000(b: &mut Bencher) {
     }
 
     b.iter(|| {
-        let mut filter = Xor8::<RandomState>::new();
+        let mut filter = Xor8::new();
         keys.iter().for_each(|key| filter.insert(key));
         filter.build();
     })
@@ -95,7 +93,7 @@ fn bench_contains_100000(b: &mut Bencher) {
     }
 
     let filter = {
-        let mut filter = Xor8::<RandomState>::new();
+        let mut filter = Xor8::new();
         filter.populate(&keys);
         filter.build();
         filter
@@ -121,7 +119,7 @@ fn bench_contains_key_100000(b: &mut Bencher) {
     }
 
     let filter = {
-        let mut filter = Xor8::<RandomState>::new();
+        let mut filter = Xor8::new();
         filter.populate(&keys);
         filter.build();
         filter

@@ -5,8 +5,9 @@
 //! written in golang.
 
 use std::{
-    collections::hash_map::RandomState,
+    collections::hash_map::DefaultHasher,
     ffi, fs,
+    hash::BuildHasherDefault,
     hash::{BuildHasher, Hash, Hasher},
     io::{self, Error, ErrorKind, Read, Write},
 };
@@ -67,7 +68,7 @@ struct KeyIndex {
 ///
 /// This implementation has a false positive rate of about 0.3%
 /// and a memory usage of less than 9 bits per entry for sizeable sets.
-pub struct Xor8<H = RandomState>
+pub struct Xor8<H = BuildHasherDefault<DefaultHasher>>
 where
     H: BuildHasher,
 {
@@ -89,12 +90,15 @@ where
     }
 }
 
-impl Default for Xor8<RandomState> {
-    /// New Xor8 instance initialized with `DefaulHasher`.
+impl<H> Default for Xor8<H>
+where
+    H: BuildHasher + Default,
+{
+    /// New Xor8 instance initialized with `DefaultHasher`.
     fn default() -> Self {
         Xor8 {
             keys: Some(Default::default()),
-            hash_builder: RandomState::new(),
+            hash_builder: H::default(),
             seed: Default::default(),
             block_length: Default::default(),
             finger_prints: Default::default(),
@@ -102,8 +106,8 @@ impl Default for Xor8<RandomState> {
     }
 }
 
-impl Xor8<RandomState> {
-    /// New Xor8 instance initialized with `DefaulHasher`.
+impl Xor8 {
+    /// New Xor8 instance initialized with `DefaultHasher`.
     pub fn new() -> Self {
         Default::default()
     }
@@ -395,7 +399,10 @@ where
     }
 }
 
-impl Xor8 {
+impl<H> Xor8<H>
+where
+    H: BuildHasher + Default,
+{
     /// File signature write on first 4 bytes of file.
     /// ^ stands for xor
     /// TL stands for filter
@@ -408,22 +415,14 @@ impl Xor8 {
         let n_fp = self.finger_prints.len() as u32; // u32 should be enough (4GB finger_prints)
 
         let mut f = fs::File::create(path)?;
-        let mut n_write = 0;
-        n_write += f.write(&Xor8::SIGNATURE_V1)?; // 4 bytes
-        n_write += f.write(&self.seed.to_be_bytes())?; // 8 bytes
-        n_write += f.write(&self.block_length.to_be_bytes())?; // 4 bytes
-        n_write += f.write(&n_fp.to_be_bytes())?; // 4 bytes
-        n_write += f.write(&self.finger_prints)?;
+        f.write_all(&Self::SIGNATURE_V1)?; // 4 bytes
+        f.write_all(&self.seed.to_be_bytes())?; // 8 bytes
+        f.write_all(&self.block_length.to_be_bytes())?; // 4 bytes
+        f.write_all(&n_fp.to_be_bytes())?; // 4 bytes
+        f.write_all(&self.finger_prints)?;
 
-        let n_expect = 4 + 8 + 4 + 4 + self.finger_prints.len();
-        if n_write == n_expect {
-            Ok(n_write)
-        } else {
-            Err(Error::new(
-                ErrorKind::InvalidData,
-                "Write data size mismatch",
-            ))
-        }
+        let n_written = 4 + 8 + 4 + 4 + self.finger_prints.len();
+        Ok(n_written)
     }
 
     /// Read from file in binary format
@@ -437,7 +436,7 @@ impl Xor8 {
         f.read_exact(&mut buf_signature)?;
         if buf_signature
             .iter()
-            .zip(&Xor8::SIGNATURE_V1)
+            .zip(&Self::SIGNATURE_V1)
             .any(|(a, b)| a != b)
         {
             return Err(Error::new(
@@ -454,9 +453,9 @@ impl Xor8 {
         let n_read = f.read_to_end(&mut finger_prints)?;
 
         if n_read == n_fp {
-            Ok(Xor8 {
+            Ok(Self {
                 keys: Default::default(),
-                hash_builder: RandomState::new(),
+                hash_builder: H::default(),
                 seed: u64::from_be_bytes(buf_seed),
                 block_length: u32::from_be_bytes(buf_block_length),
                 finger_prints,
@@ -489,7 +488,7 @@ mod tests {
         }
 
         let filter = {
-            let mut filter = Xor8::<RandomState>::new();
+            let mut filter = Xor8::new();
             filter.populate(&keys);
             filter.build();
             filter
@@ -528,7 +527,7 @@ mod tests {
         }
 
         let filter = {
-            let mut filter = Xor8::<RandomState>::new();
+            let mut filter = Xor8::new();
             filter.populate_keys(&keys);
             filter.build();
             filter
@@ -566,7 +565,7 @@ mod tests {
         }
 
         let filter = {
-            let mut filter = Xor8::<RandomState>::new();
+            let mut filter = Xor8::new();
             keys.iter().for_each(|key| filter.insert(key));
             filter.build();
             filter
